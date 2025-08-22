@@ -72,6 +72,17 @@
 
 extern struct tm timeinfo;
 
+struct PowerDaySample {
+  uint8_t hour;
+  uint8_t minute;
+  float power; // v kW
+};
+
+PowerDaySample powerDay[DAY_POINTS];
+int powerDayIndex = 0;
+int lastDay = -1;
+unsigned long lastDayReset = 0;
+
 //String APhostname = "SmartEVSE-" + String( MacId() & 0xffff, 10);           // SmartEVSE access point Name = SmartEVSE-xxxxx
 extern String APhostname;
 extern void network_loop(void);
@@ -94,6 +105,7 @@ uint16_t ModbusData[50];    // 50 registers
 extern uint8_t WIFImode;
 String SmartEVSEHost = "";
 
+unsigned long lastPowerDaySample = 0;
 unsigned long ModbusTimer=0;
 unsigned char dataready=0, datareadyAPI=0, CTcount, DSMRver, IrmsMode = 0;
 unsigned char LedCnt, LedState, LedSeq[4] = {0,0,0,0};
@@ -234,6 +246,25 @@ void read_settings(bool write) {
   } else {
       _LOG_A("Can not open preferences!\n");
   }
+}
+
+void addPowerDaySample(float power) {
+  unsigned long nowMillis = millis();
+
+  // Resetiraj buffer vsakih 30 sekund
+  if (nowMillis - lastDayReset > 30000) {
+    memset(powerDay, 0, sizeof(powerDay));
+    powerDayIndex = 0;
+    lastDayReset = nowMillis;
+  }
+
+  time_t now = time(NULL);
+  struct tm *tm_info = localtime(&now);
+
+  powerDay[powerDayIndex].hour = tm_info->tm_hour;
+  powerDay[powerDayIndex].minute = tm_info->tm_min;
+  powerDay[powerDayIndex].power = power;
+  powerDayIndex = (powerDayIndex + 1) % DAY_POINTS;
 }
 
 
@@ -1062,6 +1093,15 @@ bool handle_URI(struct mg_connection *c, struct mg_http_message *hm,  webServerR
             doc["phase_currents"]["L3"] = MainsMeterIrms[2];
             doc["phase_currents"]["last_data_update"] = phasesLastUpdate;
 
+            JsonArray dayHistory = doc.createNestedArray("power_day");
+            for (int i = 0; i < DAY_POINTS; i++) {
+              JsonObject sample = dayHistory.createNestedObject();
+              char buf[6];
+              sprintf(buf, "%02d:%02d", powerDay[i].hour, powerDay[i].minute);
+              sample["time"] = String(buf);
+              sample["power"] = powerDay[i].power;        
+            }
+
             String json;
             serializeJson(doc, json);
             mg_http_reply(c, 200, "Content-Type: application/json\r\n", "%s\n", json.c_str());    // Yes. Respond JSON
@@ -1099,6 +1139,18 @@ void loop() {
         //this block is for non-time critical stuff that needs to run approx 1 / second
         // reset the WDT every second
         esp_task_wdt_reset();
+
+
+        if (millis() - lastPowerDaySample > 5000) {
+            lastPowerDaySample = millis();
+            float voltage = 230.0; // prilagodi, če imaš drugo napetost
+            float total_power = voltage * (
+                MainsMeterIrms[0]/10.0 +
+                MainsMeterIrms[1]/10.0 +
+                MainsMeterIrms[2]/10.0
+            ); // v W
+            addPowerDaySample(total_power / 1000.0); // v kW
+        }
 
         if (shouldReboot) {
             delay(5000);                                                        //give user some time to read any message on the webserver
