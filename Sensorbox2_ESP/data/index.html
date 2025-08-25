@@ -31,11 +31,12 @@
       let mqttEditMode = false;
       let UploadEditMode = false;
 
+      //graph for whole day
       let powerDayLabels = [];
       let powerDayData = [];
       let powerDayChart = null;
 
-      function updateDayChart() {
+     function updateDayChart() {
         if (!powerDayChart) {
           const ctx = document.getElementById('powerDayChart').getContext('2d');
           powerDayChart = new Chart(ctx, {
@@ -43,20 +44,36 @@
             data: {
               labels: powerDayLabels,
               datasets: [{
-                label: 'Poraba danes (kW)',
+                label: 'Moč danes (kW)',
                 data: powerDayData,
                 borderColor: 'rgba(255,99,132,1)',
                 backgroundColor: 'rgba(255,99,132,0.2)',
                 fill: true,
-                pointRadius: 3
+                pointRadius: 0
               }]
             },
             options: {
-              scales: {
-                x: { title: { display: true, text: 'Čas' } },
-                y: { title: { display: true, text: 'kW' } }
-              }
+            scales: {
+              x: {
+                title: { display: true, text: 'Čas [h]' },
+                ticks: {
+                  callback: function(value, index, ticks) {
+                    // Prikaži le ure na vsake 2 uri, brez :00
+                    const label = this.getLabelForValue(value);
+                    if (label && label.endsWith(':00')) {
+                      const hour = parseInt(label.split(':')[0], 10);
+                      return hour % 2 === 0 ? hour.toString() : '';
+                    }
+                    return '';
+                  },
+                  autoSkip: false,
+                  maxRotation: 70,
+                  minRotation: 0
+                }
+              },
+              y: { title: { display: true, text: 'kW' } }
             }
+          }
           });
         } else {
           powerDayChart.data.labels = powerDayLabels;
@@ -65,13 +82,11 @@
         }
       }
 
-      //for graph
+      //real time power graph
       let powerData = [];
       let powerLabels = [];
       let powerChart = null;
 
-      $(document).ready(loadData());
-      //graph
       function updateChart() {
         if (!powerChart) {
           const ctx = document.getElementById('powerChart').getContext('2d');
@@ -80,16 +95,21 @@
             data: {
               labels: powerLabels,
               datasets: [{
-                label: 'Poraba (kW)',
+                label: 'Moč (kW)',
                 data: powerData,
                 borderColor: 'rgba(75,192,192,1)',
                 backgroundColor: 'rgba(75,192,192,0.2)',
                 fill: true,
+                pointRadius: 0
               }]
             },
             options: {
               scales: {
-                x: { title: { display: true, text: 'Čas' } },
+                x: {
+                  title: { display: true, text: 'Čas [h]' },
+                  suggestedMin: 0,
+                  suggestedMax: 24
+                },
                 y: { title: { display: true, text: 'kW' } }
               }
             }
@@ -100,33 +120,47 @@
           powerChart.update();
         }
       }
-      let powerLabelsL1 = [];
-      let powerDataL1 = [];
-      let powerChartL1 = null;
 
-      let powerLabelsL2 = [];
-      let powerDataL2 = [];
-      let powerChartL2 = null;
+      //all phases day graph
+      let powerPhasesLabels = [];
+      let powerPhasesL1 = [];
+      let powerPhasesL2 = [];
+      let powerPhasesL3 = [];
+      let powerPhasesChart = null;
 
-      let powerLabelsL3 = [];
-      let powerDataL3 = [];
-      let powerChartL3 = null;
-
-      function updateChartL1() {
-        if (!powerChartL1) {
-          const ctx = document.getElementById('powerChartL1').getContext('2d');
-          powerChartL1 = new Chart(ctx, {
+      function updatePhasesChart() {
+        if (!powerPhasesChart) {
+          const ctx = document.getElementById('powerPhasesChart').getContext('2d');
+          powerPhasesChart = new Chart(ctx, {
             type: 'line',
             data: {
-              labels: powerLabelsL1,
-              datasets: [{
-                label: 'Poraba L1 (kW)',
-                data: powerDataL1,
-                borderColor: 'rgba(255,0,0,1)',
-                backgroundColor: 'rgba(255,0,0,0.2)',
-                fill: true,
-                pointRadius: 0
-              }]
+              labels: powerPhasesLabels,
+              datasets: [
+                {
+                  label: 'L1 (kW)',
+                  data: powerPhasesL1,
+                  borderColor: 'rgba(255,0,0,1)',
+                  backgroundColor: 'rgba(255,0,0,0.1)',
+                  fill: false,
+                  pointRadius: 0
+                },
+                {
+                  label: 'L2 (kW)',
+                  data: powerPhasesL2,
+                  borderColor: 'rgba(0,255,0,1)',
+                  backgroundColor: 'rgba(0,255,0,0.1)',
+                  fill: false,
+                  pointRadius: 0
+                },
+                {
+                  label: 'L3 (kW)',
+                  data: powerPhasesL3,
+                  borderColor: 'rgba(0,0,255,1)',
+                  backgroundColor: 'rgba(0,0,255,0.1)',
+                  fill: false,
+                  pointRadius: 0
+                }
+              ]
             },
             options: {
               scales: {
@@ -136,71 +170,14 @@
             }
           });
         } else {
-          powerChartL1.data.labels = powerLabelsL1;
-          powerChartL1.data.datasets[0].data = powerDataL1;
-          powerChartL1.update();
+          powerPhasesChart.data.labels = powerPhasesLabels;
+          powerPhasesChart.data.datasets[0].data = powerPhasesL1;
+          powerPhasesChart.data.datasets[1].data = powerPhasesL2;
+          powerPhasesChart.data.datasets[2].data = powerPhasesL3;
+          powerPhasesChart.update();
         }
       }
-
-      function updateChartL2() {
-        if (!powerChartL2) {
-          const ctx = document.getElementById('powerChartL2').getContext('2d');
-          powerChartL2 = new Chart(ctx, {
-            type: 'line',
-            data: {
-              labels: powerLabelsL2,
-              datasets: [{
-                label: 'Poraba L2 (kW)',
-                data: powerDataL2,
-                borderColor: 'rgba(0,255,0,1)',
-                backgroundColor: 'rgba(0,255,0,0.2)',
-                fill: true,
-                pointRadius: 0
-              }]
-            },
-            options: {
-              scales: {
-                x: { title: { display: true, text: 'Čas' } },
-                y: { title: { display: true, text: 'kW' } }
-              }
-            }
-          });
-        } else {
-          powerChartL2.data.labels = powerLabelsL2;
-          powerChartL2.data.datasets[0].data = powerDataL2;
-          powerChartL2.update();
-        }
-      }
-
-      function updateChartL3() {
-        if (!powerChartL3) {
-          const ctx = document.getElementById('powerChartL3').getContext('2d');
-          powerChartL3 = new Chart(ctx, {
-            type: 'line',
-            data: {
-              labels: powerLabelsL3,
-              datasets: [{
-                label: 'Poraba L3 (kW)',
-                data: powerDataL3,
-                borderColor: 'rgba(0,0,255,1)',
-                backgroundColor: 'rgba(0,0,255,0.2)',
-                fill: true,
-                pointRadius: 0
-              }]
-            },
-            options: {
-              scales: {
-                x: { title: { display: true, text: 'Čas' } },
-                y: { title: { display: true, text: 'kW' } }
-              }
-            }
-          });
-        } else {
-          powerChartL3.data.labels = powerLabelsL3;
-          powerChartL3.data.datasets[0].data = powerDataL3;
-          powerChartL3.update();
-        }
-      }
+      $(document).ready(loadData());
 
       function loadData(){
         $.ajax({
@@ -257,32 +234,22 @@
               powerDayData = data.power_day.map(item => item.power);
               updateDayChart();
             }
-            // L1
-            powerLabelsL1.push(timeLabel);
-            powerDataL1.push((voltage * (data.phase_currents.L1/10) / 1000).toFixed(2));
-            if (powerLabelsL1.length > 10) {
-              powerLabelsL1.shift();
-              powerDataL1.shift();
-            }
-            updateChartL1();
+            
+            // Dodaj podatke za vsako fazo
+            powerPhasesLabels.push(timeLabel);
+            powerPhasesL1.push((voltage * (data.phase_currents.L1/10) / 1000).toFixed(2));
+            powerPhasesL2.push((voltage * (data.phase_currents.L2/10) / 1000).toFixed(2));
+            powerPhasesL3.push((voltage * (data.phase_currents.L3/10) / 1000).toFixed(2));
 
-            // L2
-            powerLabelsL2.push(timeLabel);
-            powerDataL2.push((voltage * (data.phase_currents.L2/10) / 1000).toFixed(2));
-            if (powerLabelsL2.length > 10) {
-              powerLabelsL2.shift();
-              powerDataL2.shift();
+            // Ohrani samo zadnjih 10 točk
+            if (powerPhasesLabels.length > 10) {
+              powerPhasesLabels.shift();
+              powerPhasesL1.shift();
+              powerPhasesL2.shift();
+              powerPhasesL3.shift();
             }
-            updateChartL2();
 
-            // L3
-            powerLabelsL3.push(timeLabel);
-            powerDataL3.push((voltage * (data.phase_currents.L3/10) / 1000).toFixed(2));
-            if (powerLabelsL3.length > 10) {
-              powerLabelsL3.shift();
-              powerDataL3.shift();
-            }
-            updateChartL3();
+            updatePhasesChart();
 
             if(data.phase_currents.last_data_update > 0) {
               $('#p1_data_time').text(new Date(data.phase_currents.last_data_update * 1000).toLocaleTimeString());
@@ -445,10 +412,16 @@
                                         </div>
                                     </div>
                                     <div class="card border-left-info shadow h-100 py-2" style="margin-bottom: 20px;">
-                                    <div class="card-body">
-                                      <div class="text-xl font-weight-bold text-info text-uppercase mb-1">Trenutna moč (kW)</div>
-                                      <canvas id="powerChart" width="400" height="200"></canvas>
+                                      <div class="card-body">
+                                        <div class="text-xl font-weight-bold text-info text-uppercase mb-1">Moč danes (kW)</div>
+                                        <canvas id="powerDayChart" width="400" height="200"></canvas>
+                                      </div>
                                     </div>
+                                    <div class="card border-left-info shadow h-100 py-2" style="margin-bottom: 20px;">
+                                      <div class="card-body">
+                                        <div class="text-xl font-weight-bold text-info text-uppercase mb-1">Trenutna moč (kW)</div>
+                                        <canvas id="powerChart" width="400" height="200"></canvas>
+                                      </div>
                                     </div>
                                 </div>
                                 <div class="col-auto">
@@ -459,27 +432,9 @@
                                     </i>
                                 </div>
                                 <div class="card border-left-info shadow h-100 py-2" style="margin-bottom: 20px;">
-                                <div class="card-body">
-                                  <div class="text-xl font-weight-bold text-info text-uppercase mb-1">moč danes (kW)</div>
-                                  <canvas id="powerDayChart" width="400" height="200"></canvas>
-                                </div>
-                                </div>
-                                <div class="card border-left-info shadow h-100 py-2" style="margin-bottom: 20px;">
-                                <div class="card-body">
-                                  <div class="text-xl font-weight-bold text-info text-uppercase mb-1">Trenutna moč L1 (kW)</div>
-                                  <canvas id="powerChartL1" width="400" height="200"></canvas>
-                                </div>
-                                </div>
-                                <div class="card border-left-info shadow h-100 py-2" style="margin-bottom: 20px;">
                                   <div class="card-body">
-                                    <div class="text-xl font-weight-bold text-info text-uppercase mb-1">Trenutna moč L2 (kW)</div>
-                                    <canvas id="powerChartL2" width="400" height="200"></canvas>
-                                  </div>
-                                </div>
-                                <div class="card border-left-info shadow h-100 py-2" style="margin-bottom: 20px;">
-                                  <div class="card-body">
-                                    <div class="text-xl font-weight-bold text-info text-uppercase mb-1">Trenutna moč L3 (kW)</div>
-                                    <canvas id="powerChartL3" width="400" height="200"></canvas>
+                                    <div class="text-xl font-weight-bold text-info text-uppercase mb-1">Trenutna moč po fazah (kW)</div>
+                                    <canvas id="powerPhasesChart" width="400" height="200"></canvas>
                                   </div>
                                 </div>
                             </div>

@@ -78,10 +78,20 @@ struct PowerDaySample {
   float power; // v kW
 };
 
+
 PowerDaySample powerDay[DAY_POINTS];
 int powerDayIndex = 0;
 int lastDay = -1;
 unsigned long lastDayReset = 0;
+
+void initPowerDayBuffer() {
+  for (int i = 0; i < DAY_POINTS; i++) {
+    powerDay[i].hour = (i * 15) / 60;
+    powerDay[i].minute = (i * 15) % 60;
+    powerDay[i].power = 0.0;
+  }
+  powerDayIndex = 0;
+}
 
 //String APhostname = "SmartEVSE-" + String( MacId() & 0xffff, 10);           // SmartEVSE access point Name = SmartEVSE-xxxxx
 extern String APhostname;
@@ -249,22 +259,22 @@ void read_settings(bool write) {
 }
 
 void addPowerDaySample(float power) {
-  unsigned long nowMillis = millis();
-
-  // Resetiraj buffer vsakih 30 sekund
-  if (nowMillis - lastDayReset > 30000) {
-    memset(powerDay, 0, sizeof(powerDay));
-    powerDayIndex = 0;
-    lastDayReset = nowMillis;
-  }
-
   time_t now = time(NULL);
   struct tm *tm_info = localtime(&now);
 
-  powerDay[powerDayIndex].hour = tm_info->tm_hour;
-  powerDay[powerDayIndex].minute = tm_info->tm_min;
-  powerDay[powerDayIndex].power = power;
-  powerDayIndex = (powerDayIndex + 1) % DAY_POINTS;
+  // Resetiraj buffer ob polnoči
+  if (lastDay != tm_info->tm_mday) {
+    initPowerDayBuffer();
+    lastDay = tm_info->tm_mday;
+  }
+
+  // Zapiši, če je trenutna minuta deljiva z 15 (npr. 11:30:00 do 11:30:59)
+  if (tm_info->tm_min % 15 == 0) {
+    int idx = tm_info->tm_hour * 4 + tm_info->tm_min / 15;
+    if (idx >= 0 && idx < DAY_POINTS) {
+      powerDay[idx].power = power;
+    }
+  }
 }
 
 
@@ -781,6 +791,8 @@ void setup() {
   
 	PicSetup();
 
+  initPowerDayBuffer();
+
   //lower the CPU frequency to 160 MHz
   //setCpuFrequencyMhz(160);
 
@@ -1024,7 +1036,7 @@ bool handle_URI(struct mg_connection *c, struct mg_http_message *hm,  webServerR
 
             boolean evConnected = pilot != PILOT_12V;                    //when access bit = 1, p.ex. in OFF mode, the STATEs are no longer updated
 */
-            DynamicJsonDocument doc(1600); // https://arduinojson.org/v6/assistant/
+            DynamicJsonDocument doc(7000); // https://arduinojson.org/v6/assistant/
             doc["version"] = String(VERSION);
             doc["serialnr"] = serialnr;
             doc["smartevse_host"] = SmartEVSEHost;
@@ -1096,7 +1108,7 @@ bool handle_URI(struct mg_connection *c, struct mg_http_message *hm,  webServerR
             JsonArray dayHistory = doc.createNestedArray("power_day");
             for (int i = 0; i < DAY_POINTS; i++) {
               JsonObject sample = dayHistory.createNestedObject();
-              char buf[6];
+              char buf[9];
               sprintf(buf, "%02d:%02d", powerDay[i].hour, powerDay[i].minute);
               sample["time"] = String(buf);
               sample["power"] = powerDay[i].power;        
@@ -1141,15 +1153,14 @@ void loop() {
         esp_task_wdt_reset();
 
 
-        if (millis() - lastPowerDaySample > 5000) {
+        if (millis() - lastPowerDaySample > 25 * 1000) { // every 
             lastPowerDaySample = millis();
-            float voltage = 230.0; // prilagodi, če imaš drugo napetost
-            float total_power = voltage * (
-                MainsMeterIrms[0]/10.0 +
-                MainsMeterIrms[1]/10.0 +
-                MainsMeterIrms[2]/10.0
-            ); // v W
-            addPowerDaySample(total_power / 1000.0); // v kW
+            float voltage = 230.0;
+            float l1 = voltage * (MainsMeterIrms[0]/10.0) / 1000.0;
+            float l2 = voltage * (MainsMeterIrms[1]/10.0) / 1000.0;
+            float l3 = voltage * (MainsMeterIrms[2]/10.0) / 1000.0;
+            float total_power = l1 + l2 + l3;
+            addPowerDaySample(total_power); // skupni graf
         }
 
         if (shouldReboot) {

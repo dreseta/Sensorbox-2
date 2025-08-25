@@ -37,7 +37,7 @@
 
 #include "debug.h"
 
-#define DAY_POINTS 6 // 24 ur * 4 (vsakih 15 min)
+#define DAY_POINTS 96 // 24 ur * 4 (vsakih 15 min)
 
 
 // Toggle pins of the RS485 transceiver.
